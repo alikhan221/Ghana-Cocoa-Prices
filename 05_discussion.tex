@@ -1,0 +1,32 @@
+\chapter{Forecasting and Results}
+\label{ch:evaluation}
+
+\section{Model Training and Validation Process}
+Daily cocoa price data was first aggregated into monthly averages to reduce noise and better capture long-term price dynamics. The resulting monthly time series was split into training and test sets, where the last 12 months were reserved as a holdout set for validation. This approach allowed for model fitting on historical data and objective evaluation on unseen future observations. Seven forecasting models were considered for comparison: ETS (Exponential Smoothing), ARIMA(0,1,1), ARIMA(1,1,0), ARIMA(1,1,1) with drift, ARIMA(2,1,1), ARIMA(3,1,0), and an automated model selected using \texttt{auto.arima()}. The ETS model is well-suited to data with level, trend, and seasonality components, while the ARIMA models apply differencing and various combinations of autoregressive (AR) and moving average (MA) terms to capture temporal dependencies. ARIMA(3,1,0), which includes three autoregressive terms and first differencing but no moving average component, was found to produce the best forecasts on the test set. This model captures the extended influence of past price values, suggesting that cocoa prices are more dependent on their own lagged values than short-term shocks.
+
+\section{Performance Evaluation}
+Each model was evaluated using standard forecast accuracy metrics: RMSE (Root Mean Squared Error), MAE (Mean Absolute Error), and AIC (Akaike Information Criterion). RMSE penalizes large errors, MAE reflects the average magnitude of error, and AIC balances model fit with complexity. Forecasts were generated using the training data, and their performance was assessed against the test set.
+
+The ARIMA(3,1,0) model achieved the lowest RMSE and MAE values among all tested models, and its AIC was also among the lowest. These results indicate that this model best captured the underlying structure of the cocoa price series with minimal overfitting. Additionally, residual diagnostics including the Ljung-Box test confirmed that the residuals of this model resembled white noise, indicating that it had effectively extracted all predictable patterns from the data.
+
+\section{Forecasted Values and Observed Patterns}
+
+Forecasts from each model were plotted against actual test set prices. The ETS model followed the broader trend but struggled to capture price shocks. ARIMA models with lower orders, such as ARIMA(1,1,0) and ARIMA(1,1,1), captured short-term dynamics but missed longer-term dependencies. In contrast, ARIMA(3,1,0) closely aligned with actual observations, producing more stable and accurate forecasts across the 12-month horizon. Visual inspection of the forecast intervals from ARIMA(3,1,0) further supported its reliability, as the intervals remained narrow and consistent across the forecast period. Residual plots showed no signs of autocorrelation or systematic bias, confirming the appropriateness of the model.
+
+\section{Summary}
+
+Through rigorous model testing and validation, ARIMA(3,1,0) emerged as the most accurate and robust forecasting model for cocoa prices in our dataset. Its autoregressive structure allowed it to effectively capture extended lags in price behavior, outperforming simpler ARIMA and ETS models. The model’s strong test set performance and white-noise residuals reinforce its suitability for short-term cocoa price forecasting. As such, ARIMA(3,1,0) was used as the baseline model against which external economic and climate-informed models were compared. The non-lag, or current, models use contemporaneous monthly values of climate (average temperature and total rainfall) and economic indicators (Consumer Price Index and Producer Price Index) to forecast cocoa prices using the ARIMA(3,1,0) structure. These models were built to investigate whether real-time changes in external variables can immediately influence cocoa market prices.
+
+\subsection{Economic Model (Current Values)}
+
+The current economic model yielded an \textbf{AIC of 1771.594} and an \textbf{RMSE of 1551.032}, indicating strong model fit and forecasting accuracy. The relatively low AIC suggests that the model balances fit and complexity well, while the RMSE shows that forecast errors were moderate. The economic indicators used—CPI and PPI—are likely capturing demand-side forces such as consumer purchasing power and producer cost pressures. The strong performance of this model implies that global cocoa markets are quickly responsive to macroeconomic conditions, validating the importance of economic signals in commodity pricing.
+The \textbf{Ljung-Box p-value} for this model was statistically acceptable, indicating that residuals were approximately white noise and the model captured the majority of structure in the data.
+
+\subsection{Climate Model (Current Values)}
+
+In contrast, the current climate model showed \textbf{higher AIC (4286.364)} and \textbf{RMSE (3169.342)}. While it still adds explanatory value, its predictive performance was weaker compared to the economic model. This is not unexpected, as climatic effects on cocoa yield may require time to manifest—weather conditions in a given month may not influence prices until weeks or months later. As a result, the immediate (non-lagged) use of climate variables provides less forecasting power for short-term price prediction.
+
+\subsection{Interpretation and Implications}
+
+These results suggest that \textbf{economic variables tend to have a more immediate effect on cocoa prices}, potentially through their impact on demand and global market expectations. Conversely, \textbf{climate variables appear to influence prices with a delay}, likely through supply chain effects such as yield loss or harvest delays. The non-lag models serve as an important baseline for understanding the responsiveness of cocoa prices to external shocks. While current economic indicators proved highly useful for real-time price forecasting, the climate model's performance highlighted the need for lag structures to better capture delayed agricultural effects. In sum, the \textbf{current economic model} is effective in modeling demand-side shocks, while \textbf{lagged climate models} are better suited for capturing supply-side disturbances. These insights support a dual-approach modeling strategy when attempting to forecast commodity prices in the presence of diverse external forces.
+

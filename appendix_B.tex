@@ -1,0 +1,225 @@
+\chapter{Data Exploration Code}
+\label{appn:B}
+\begin{lstlisting}[language=R]
+
+library(tidyverse)
+
+# Load the cocoa futures price dataset
+cocoa_data <- read.csv("/Users/camillyfuentes/Downloads/Daily Prices_ICCO.csv", stringsAsFactors = FALSE)
+
+# Inspect the first few rows
+head(cocoa_data)
+
+# Check structure and summary of the data
+str(cocoa_data)
+summary(cocoa_data)
+
+# Convert DATE column to Date format
+cocoa_data$Date <- as.Date(cocoa_data$Date, format="%d/%m/%Y")
+
+# Check for missing values
+colSums(is.na(cocoa_data))
+
+# Handle missing values (forward-fill missing prices if applicable)
+cocoa_data <- cocoa_data %>% fill(everything(), .direction = "down")
+
+# Remove duplicate rows
+cocoa_data <- distinct(cocoa_data)
+
+# Save cleaned cocoa price dataset
+write.csv(cocoa_data, "cleaned_Cocoa_Prices.csv", row.names = FALSE)
+
+# Print a message indicating completion
+cat("Data cleaning completed. Cleaned data saved as 'cleaned_Ghana_data.csv' and 'cleaned_Cocoa_Prices.csv'\n")
+
+#Clean Ghana data
+
+# Load necessary libraries
+library(tidyverse)
+
+# Load the dataset
+ghana_data <- read.csv("/Users/camillyfuentes/Downloads/Ghana_data.csv", stringsAsFactors = FALSE)
+
+# Inspect the first few rows
+head(ghana_data)
+
+# Check structure and summary of the data
+str(ghana_data)
+summary(ghana_data)
+
+# Convert DATE column to Date format
+ghana_data$DATE <- as.Date(ghana_data$DATE, format="%Y-%m-%d")
+
+# Check for missing values
+colSums(is.na(ghana_data))
+
+# Handle missing values:
+# - If PRCP is missing, assume 0 (no precipitation)
+ghana_data$PRCP[is.na(ghana_data$PRCP)] <- 0
+
+# - If temperature values (TAVG, TMAX, TMIN) are missing, fill with column mean
+ghana_data$TAVG[is.na(ghana_data$TAVG)] <- mean(ghana_data$TAVG, na.rm = TRUE)
+ghana_data$TMAX[is.na(ghana_data$TMAX)] <- mean(ghana_data$TMAX, na.rm = TRUE)
+ghana_data$TMIN[is.na(ghana_data$TMIN)] <- mean(ghana_data$TMIN, na.rm = TRUE)
+
+# Remove duplicate rows
+ghana_data <- distinct(ghana_data)
+
+# Save cleaned dataset
+write.csv(ghana_data, "cleaned_Ghana_data.csv", row.names = FALSE)
+
+# Print a message indicating completion
+cat("Data cleaning completed. Cleaned data saved as 'cleaned_Ghana_data.csv'\n")
+
+# Load necessary libraries
+library(tidyverse)
+library(lubridate)
+library(zoo)
+
+# Load the cleaned datasets
+ghana_data <- read.csv("cleaned_Ghana_data.csv", stringsAsFactors = FALSE)
+cocoa_data <- read.csv("cleaned_Cocoa_Prices.csv", stringsAsFactors = FALSE)
+
+# Convert DATE columns to Date format
+ghana_data$DATE <- as.Date(ghana_data$DATE, format="%Y-%m-%d")
+cocoa_data$DATE <- as.Date(cocoa_data$Date, format="%Y-%m-%d")
+
+# Ensure the datasets cover the full time range (1990 - latest available)
+full_dates <- data.frame(DATE = seq(from = min(c(ghana_data$DATE, cocoa_data$DATE), na.rm = TRUE),
+                                    to = max(c(ghana_data$DATE, cocoa_data$DATE), na.rm = TRUE),
+                                    by = "day"))
+
+# Merge datasets using full join to preserve all dates
+merged_data <- full_dates %>%
+  left_join(ghana_data, by = "DATE") %>%
+  left_join(cocoa_data, by = "DATE")
+
+# Handle missing values only if Cocoa_Price column exists
+if ("Cocoa_Price" %in% colnames(merged_data)) {
+  # Convert Cocoa_Price to numeric (handling possible character values)
+  merged_data$Cocoa_Price <- as.numeric(merged_data$Cocoa_Price)
+  # Forward-fill missing Cocoa Prices (if any)
+  merged_data$Cocoa_Price <- na.locf(merged_data$Cocoa_Price, na.rm = FALSE, na.action = na.pass)
+  # Backward-fill remaining missing Cocoa Prices (if any)
+  merged_data$Cocoa_Price <- na.locf(merged_data$Cocoa_Price, fromLast = TRUE, na.rm = FALSE, na.action = na.pass)
+}
+
+# - Fill missing climate data with column means (if applicable)
+climate_vars <- c("TAVG", "TMAX", "TMIN", "PRCP")
+for (var in climate_vars) {
+  if (var %in% colnames(merged_data)) {
+    merged_data[[var]][is.na(merged_data[[var]])] <- mean(merged_data[[var]], na.rm = TRUE)
+  }
+}
+# Change name
+merged_data <- merged_data %>%
+  rename(Cocoa_Price = ICCO.daily.price..US..tonne.) 
+
+# Remove any remaining NA values before time series analysis
+merged_data <- na.omit(merged_data)
+
+# Save the cleaned and merged dataset
+write.csv(merged_data, "merged_Ghana_Cocoa_data.csv", row.names = FALSE)
+
+# Print confirmation
+cat("Merging completed. Cleaned dataset saved as 'merged_Ghana_Cocoa_data.csv'\n")
+
+# Load necessary libraries
+options(repos = c(CRAN = "https://cloud.r-project.org/"))
+install.packages("ggcorrplot")
+library(tidyverse)
+library(lubridate)
+library(ggplot2)
+library(forecast)
+library(tseries)
+library(zoo)
+install.packages("ggcorrplot")
+library(ggcorrplot)
+install.packages("copula")
+library(copula)
+library(dplyr)
+
+# 1 Data Overview
+summary(merged_data)
+str(merged_data)
+colSums(is.na(merged_data))  # Checking for missing values
+
+# 2 Time Series Visualization
+# Plot Cocoa Prices over Time
+ggplot(merged_data, aes(x = DATE, y = Cocoa_Price)) +
+  geom_line(color = "blue") +
+  labs(title = "Cocoa Prices Over Time", x = "Date", y = "Price") +
+  theme_minimal()
+
+# Moving Average (Rolling Mean) to Smooth Trends
+
+# Ensure Cocoa_Price is character before cleaning
+merged_data$Cocoa_Price <- as.character(merged_data$Cocoa_Price)
+
+# Remove commas, spaces, and any other non-numeric characters
+merged_data$Cocoa_Price <- gsub("[^0-9.]","", merged_data$Cocoa_Price)
+
+# Trim any leading/trailing spaces that may have been left after gsub
+merged_data$Cocoa_Price <- trimws(merged_data$Cocoa_Price)
+
+# Check for any non-numeric values before conversion
+head(merged_data$Cocoa_Price)
+
+# Convert to numeric
+merged_data$Cocoa_Price <- as.numeric(merged_data$Cocoa_Price)
+merged_data$Cocoa_Price <- na.approx(merged_data$Cocoa_Price, na.rm = FALSE)
+
+merged_data$Rolling_Avg <- rollmean(merged_data$Cocoa_Price, k = 30, fill = NA)
+
+ggplot(merged_data, aes(x = DATE)) +
+  geom_line(aes(y = Cocoa_Price, color = "Original")) +
+  geom_line(aes(y = Rolling_Avg, color = "30-day Rolling Avg")) +
+  labs(title = "Cocoa Prices with Rolling Average", x = "Date", y = "Price") +
+  #scale_color_manual(values = c("Original" = "blue", "30-day Rolling Avg" = "red")) +
+  theme_minimal()
+
+# 3 Seasonality Analysis
+# Convert to time series
+start_year <- year(min(merged_data$DATE, na.rm = TRUE))
+start_month <- 1  # Ensuring consistent start
+
+cocoa_ts <- ts(merged_data$Cocoa_Price, frequency = 365, start = c(start_year, start_month))
+
+# Check for NA values in time series
+sum(is.na(cocoa_ts))  # Should be 0 before decomposition
+
+# Perform STL decomposition
+decomp_stl <- stl(cocoa_ts, s.window = "periodic")
+plot(decomp_stl)
+
+# 4 Autocorrelation & Partial Autocorrelation
+merged_data$Cocoa_Price <- as.numeric(merged_data$Cocoa_Price)
+acf(merged_data$Cocoa_Price, main = "Autocorrelation of Cocoa Prices")
+pacf(merged_data$Cocoa_Price, main = "Partial Autocorrelation of Cocoa Prices")
+
+# 5 Correlation Analysis
+numeric_data <- merged_data %>% select_if(is.numeric)
+corr_matrix <- cor(numeric_data, use = "complete.obs")
+ggcorrplot(corr_matrix, lab = TRUE, title = "Correlation Matrix")
+
+# 6 Cross-Correlation with Climate Data
+ccf(merged_data$PRCP, merged_data$Cocoa_Price, main = "Cross-Correlation: Rainfall & Cocoa Prices")
+ccf(merged_data$TAVG, merged_data$Cocoa_Price, main = "Cross-Correlation: Temperature & Cocoa Prices")
+
+# Print completion message
+cat("Data Exploration Completed. Plots and Analysis Generated.\n")
+```
+```{r}
+log_series <- log(cocoa_ts)
+par(mfrow = c(2,1)) # Set layout for 2 plots
+plot(cocoa_ts, main = "Original Time Series", col = "blue")
+plot(log_series, main = "Log-Transformed Time Series", col = "red")
+
+library(tseries)
+adf.test(log_series)
+
+
+diff_log_series <- diff(log_series)
+plot(diff_log_series, main = "Differenced Log-Transformed Time Series", col = "purple")
+
+\end{lstlisting}

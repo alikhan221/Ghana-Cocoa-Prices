@@ -1,0 +1,30 @@
+\chapter{Conclusion and Recommendations}
+This study aimed to forecast cocoa prices using both univariate and multivariate time series techniques, with a specific focus on assessing the predictive value of external economic and climate indicators. Using a clean and carefully preprocessed monthly cocoa price dataset from the International Cocoa Organization, we developed a series of ARIMA-based models to identify the most accurate and interpretable approach to short-term forecasting.
+
+The ARIMA(3,1,0) model emerged as the best-performing baseline model, achieving the lowest RMSE and AIC values among all candidate models, including ETS, ARIMA(1,1,1), and auto.arima. Residual diagnostics further confirmed the adequacy of the ARIMA(3,1,0) specification, as residuals appeared approximately normally distributed and free from autocorrelation, satisfying key assumptions for model validity.
+
+To deepen the analysis, we extended the baseline model by incorporating both \textbf{contemporary} and \textbf{lagged} external regressors. Climate variables (average temperature and total rainfall) and economic indicators (CPI and PPI) were tested in separate ARIMAX(3,1,0) models. Results from these extensions suggest that:
+
+\begin{itemize}
+    \item \textbf{Current economic variables} had a stronger predictive impact than their lagged versions, implying demand-side shocks tend to affect cocoa prices more immediately.
+    \item \textbf{Lagged climate variables} slightly outperformed their non-lagged counterparts in terms of RMSE, supporting the hypothesis that weather conditions influence supply-side dynamics with a delay.
+\end{itemize}
+Ljung-Box tests confirmed that residuals across models were largely uncorrelated, indicating well-specified models. Visual inspection of forecast plots also showed that the economic models (especially the contemporaneous one) tracked real-world price movements more closely than the climate models.
+
+By selecting ARIMA(3,1,0) as the core model and thoughtfully layering external indicators, we were able to build models that offer interpretability regarding the drivers of cocoa price volatility. 
+
+\section{Recommendations}
+\begin{itemize}
+  \item \textbf{Integrate broader macroeconomic variables}—including exchange rates (USD/GHS, EUR/USD), inflation, interest rates, and global GDP growth—into future modeling efforts. These variables significantly influence cocoa markets. For instance, exchange rate volatility affects export competitiveness (Alori \& Kutu, 2019), and inflation/interest rates shape investment behavior in agriculture (Bleaney \& Greenaway, 2001).
+  
+  \item \textbf{Include climate and environmental indicators} such as rainfall variability, temperature anomalies, and disease incidence in cocoa-producing regions. This aligns with evidence that climate change is a major contributor to cocoa supply shocks (J.P. Morgan, 2024) and supports the inclusion of environmental variables in forecasting frameworks.
+
+  \item \textbf{Adopt hybrid and multivariate models} such as ARIMAX or VAR to capture interactions between price and external drivers. These models allow for more robust forecasting, especially when macroeconomic or climatic conditions shift rapidly.
+
+  \item \textbf{Explicitly model volatility using GARCH models}, especially for short-term forecasting. Previous studies (e.g., Kamu et al., 2010) show that GARCH(1,1) outperforms ARIMA when accounting for variance clustering common in commodity prices.
+
+  \item \textbf{Expand the dataset's scope and granularity} by incorporating data from other major cocoa producers and variables like export volume, farm-gate pricing, and fertilizer costs. This can improve supply-side understanding and model responsiveness.
+
+  \item \textbf{Incorporate policy and geopolitical risks}—such as trade barriers, global supply chain disruptions, or regional conflict—as structural breaks or exogenous shocks in models. These factors can significantly affect short-term pricing and should not be overlooked.
+
+\end{itemize}

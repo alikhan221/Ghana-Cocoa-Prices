@@ -1,0 +1,36 @@
+\chapter{Results and Discussion}
+\label{ch:Data}
+\section{Data Description}
+
+In this section, we describe the primary datasets used in our analysis of cocoa price trends and forecasts. We utilized global cocoa price data as our response variable and complemented this with local Ghanaian price data and climate variables for enhanced modeling and interpretation.
+
+\subsection{Global Cocoa Prices}
+
+The primary dataset used for this study is a time series of monthly global cocoa prices in USD per metric ton, obtained from the International Cocoa Organization (ICCO). The dataset spans from January 2000 to March 2024 and contains 291 observations. It serves as the main variable of interest for forecasting.
+
+This series reflects global market trends and incorporates key demand-supply dynamics, trade flows, and price shocks. It also serves as the dependent variable for both our ARIMA and extended model analyses. The time series demonstrates a strong seasonal component and a noticeable upward trend beginning in late 2023, consistent with current supply-side constraints reported by J.P. Morgan (2024).
+
+\subsection{Ghana Cocoa Producer Prices}
+
+To explore local versus global price dynamics, we included Ghanaian producer price data (in local currency GHS per metric ton). Ghana is the second-largest cocoa producer globally, and this series helps assess whether domestic conditions align with international price trends.
+
+The data was sourced from the Ghana Cocoa Board (COCOBOD) and includes monthly values from 2010 to 2024. Notably, these prices are often government-controlled, resulting in less volatility compared to the global market. This distinction helped us examine the extent to which global cocoa prices are driven by broader market forces versus localized supply chain considerations.
+
+\subsection{Climate Variables for Model Extension}
+
+To evaluate the real-world drivers of cocoa supply shocks, we augmented our models using climate-related variables. These include:
+
+\begin{itemize}
+  \item \textbf{Rainfall and Temperature Anomalies}: Monthly average temperature and precipitation data across key cocoa-producing regions in Ghana and Côte d'Ivoire. These variables capture seasonal and extreme weather effects.
+  \item \textbf{Standardized Precipitation Index (SPI)}: Used to quantify drought severity, which is particularly relevant for cocoa yield.
+  \item \textbf{Climate Event Markers}: Binary variables were created to indicate months experiencing extreme climate events (e.g., El Niño or La Niña occurrences) that may disrupt harvest cycles.
+\end{itemize}
+
+The climate data was retrieved from the World Bank Climate Data API and NOAA databases. These variables were standardized and lagged where necessary to avoid endogeneity and improve model stability.
+
+\subsection{Data Preprocessing and Transformation}
+
+Prior to model fitting, all time series were checked for missing values, stationarity, and seasonality. Log transformations were applied to stabilize variance in price data, and first differencing was performed to achieve stationarity for ARIMA modeling. Climate variables were normalized to ensure consistent scaling during model training.
+
+Overall, our dataset integrates key market, regional, and environmental variables that enhance our ability to test both statistical hypotheses and real-world economic claims, such as those proposed by J.P. Morgan (2024) regarding the persistence of cocoa supply shocks into 2025.
+

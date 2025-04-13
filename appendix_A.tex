@@ -1,0 +1,250 @@
+\chapter{Model Selection Code}
+\label{appn:A}
+
+\begin{lstlisting}[language=R]
+# Load libraries
+library(tidyverse)
+library(lubridate)
+library(forecast)
+library(tseries)
+library(Metrics)
+library(ggplot2)
+
+# Data Processing - Cocoa Prices
+cocoa_data <- read.csv("Daily Prices_ICCO.csv", stringsAsFactors = FALSE)
+cocoa_data$Date <- dmy(cocoa_data$Date)
+cocoa_data$Price <- as.numeric(gsub(",", "", cocoa_data[[2]]))
+cocoa_data <- cocoa_data %>%
+  arrange(Date) %>%
+  filter(!is.na(Price)) %>%
+  mutate(Month = floor_date(Date, "month")) %>%
+  group_by(Month) %>%
+  summarise(AvgPrice = mean(Price, na.rm = TRUE)) %>%
+  ungroup()
+
+# Climate Data
+ghana_data <- read.csv("Ghana_data.csv", stringsAsFactors = FALSE)
+ghana_data$DATE <- ymd(ghana_data$DATE)
+ghana_data <- ghana_data %>%
+  drop_na(DATE, STATION) %>%
+  mutate(PRCP = ifelse(is.na(PRCP), 0, PRCP)) %>%
+  group_by(STATION) %>%
+  mutate(
+    TAVG = ifelse(is.na(TAVG), mean(TAVG, na.rm = TRUE), TAVG),
+    TMAX = ifelse(is.na(TMAX), mean(TMAX, na.rm = TRUE), TMAX),
+    TMIN = ifelse(is.na(TMIN), mean(TMIN, na.rm = TRUE), TMIN)
+  ) %>%
+  ungroup() %>%
+  mutate(Month = floor_date(DATE, "month"))
+
+monthly_ghana <- ghana_data %>%
+  group_by(Month) %>%
+  summarise(
+    AvgTemp = mean(TAVG, na.rm = TRUE),
+    TotalRainfall = sum(PRCP, na.rm = TRUE)
+  ) %>%
+  ungroup() %>%
+  mutate(
+    AvgTemp_lag1 = lag(AvgTemp),
+    TotalRainfall_lag1 = lag(TotalRainfall)
+  )
+
+# Economic Data (CPI and PPI)
+cpi <- read.csv("CPIAUCSL.csv")
+ppi <- read.csv("PCU3113513113517.csv")
+
+
+cpi <- cpi %>%
+  mutate(Month = floor_date(as.Date(observation_date), "month")) %>%
+  rename(CPI = CPIAUCSL) %>%
+  select(Month, CPI) %>%
+  mutate(CPI_lag1 = lag(CPI))
+
+ppi <- ppi %>%
+  mutate(Month = floor_date(as.Date(observation_date), "month")) %>%
+  rename(PPI = PCU3113513113517) %>%
+  select(Month, PPI) %>%
+  mutate(PPI_lag1 = lag(PPI))
+
+# Merge with cocoa price data
+econ_now <- inner_join(cocoa_data, cpi, by = "Month") %>% inner_join(ppi, by = "Month") %>% drop_na(CPI, PPI)
+econ_lag <- econ_now %>% drop_na(CPI_lag1, PPI_lag1)
+
+# Baseline Model
+
+price_ts <- ts(cocoa_data$AvgPrice, start = c(year(min(cocoa_data$Month)), month(min(cocoa_data$Month))), frequency = 12)
+ts_end <- end(price_ts)
+train_ts <- window(price_ts, end = c(ts_end[1], ts_end[2] - 12))
+test_ts <- window(price_ts, start = c(ts_end[1], ts_end[2] - 11))
+
+model_list <- list(
+  ARIMA_110 = Arima(train_ts, order = c(1,1,0)),
+  ARIMA_011 = Arima(train_ts, order = c(0,1,1)),
+  ARIMA_111 = Arima(train_ts, order = c(1,1,1)),
+  ARIMA_211 = Arima(train_ts, order = c(2,1,1)),
+  ARIMA_310 = Arima(train_ts, order = c(3,1,0)),
+  ARIMA_auto = auto.arima(train_ts),
+  ETS = ets(train_ts)
+)
+
+model_results <- lapply(names(model_list), function(name) {
+  model <- model_list[[name]]
+  fc <- forecast(model, h = length(test_ts))
+  pred <- as.numeric(fc$mean)
+  actual <- as.numeric(test_ts)
+  rmse_val <- tryCatch(rmse(actual, pred), error = function(e) NA)
+  mae_val <- tryCatch(mae(actual, pred), error = function(e) NA)
+  aic_val <- tryCatch(AIC(model), error = function(e) NA)
+  data.frame(Model = name, RMSE = rmse_val, MAE = mae_val, AIC = aic_val)
+})
+
+model_df <- do.call(rbind, model_results)
+model_df <- model_df[order(model_df$RMSE), ]
+print(model_df)
+
+best_model_name <- model_df$Model[1]
+best_model <- model_list[[best_model_name]]
+fc_best <- forecast(best_model, h = length(test_ts))
+forecast_df <- data.frame(
+  Date = cocoa_data$Month[(length(cocoa_data$AvgPrice) - 11):length(cocoa_data$AvgPrice)],
+  Actual = as.numeric(test_ts),
+  Forecast = as.numeric(fc_best$mean)
+)
+
+baseline_plot <- ggplot(forecast_df, aes(x = Date)) +
+  geom_line(aes(y = Actual, color = "Actual"), linewidth = 1) +
+  geom_line(aes(y = Forecast, color = "Forecast"), linetype = "dashed", linewidth = 1) +
+  labs(title = paste("Forecast vs Actual -", best_model_name),
+       x = "Date", y = "Cocoa Price", color = "") +
+  theme_minimal()
+
+print(baseline_plot)
+
+# Climate Model Selection
+climate_now <- monthly_ghana %>% select(Month, AvgTemp, TotalRainfall)
+climate_lag <- monthly_ghana %>% select(Month, AvgTemp_lag1, TotalRainfall_lag1)
+
+cocoa_clean <- cocoa_data %>% drop_na()
+
+climate_cocoa_now <- inner_join(cocoa_clean, climate_now, by = "Month") %>% drop_na()
+climate_cocoa_lag <- inner_join(cocoa_clean, climate_lag, by = "Month") %>% drop_na()
+
+build_model <- function(df, x_vars) {
+  df <- df %>% drop_na(all_of(c("AvgPrice", x_vars)))
+  n <- nrow(df)
+  n_test <- 12
+  df_train <- df[1:(n - n_test), ]
+  df_test <- df[(n - n_test + 1):n, ]
+
+  list(
+    y_train = ts(df_train$AvgPrice, start = c(year(min(df_train$Month)), month(min(df_train$Month))), frequency = 12),
+    y_test = ts(df_test$AvgPrice, start = c(year(min(df_test$Month)), month(min(df_test$Month))), frequency = 12),
+    x_train = as.matrix(df_train[, x_vars]),
+    x_test = as.matrix(df_test[, x_vars]),
+    dates = df_test$Month
+  )
+}
+model_now <- build_model(climate_cocoa_now, c("AvgTemp", "TotalRainfall"))
+model_lag <- build_model(climate_cocoa_lag, c("AvgTemp_lag1", "TotalRainfall_lag1"))
+
+fit_now <- Arima(model_now$y_train, order = c(3,1,0), xreg = model_now$x_train)
+fit_lag <- Arima(model_lag$y_train, order = c(3,1,0), xreg = model_lag$x_train)
+
+fc_now <- forecast(fit_now, xreg = model_now$x_test, h = 12)
+fc_lag <- forecast(fit_lag, xreg = model_lag$x_test, h = 12)
+
+rmse_now <- rmse(model_now$y_test, fc_now$mean)
+rmse_lag <- rmse(model_lag$y_test, fc_lag$mean)
+
+results <- data.frame(
+  Model = c("No Lags", "Lagged Climate"),
+  AIC = c(AIC(fit_now), AIC(fit_lag)),
+  RMSE = c(rmse_now, rmse_lag)
+)
+
+print(results)
+
+# Plot
+forecast_df <- data.frame(
+  Date = model_now$dates,
+  Actual = as.numeric(model_now$y_test),
+  Forecast_Now = as.numeric(fc_now$mean),
+  Forecast_Lag = as.numeric(fc_lag$mean)
+)
+
+ggplot(forecast_df, aes(x = Date)) +
+  geom_line(aes(y = Actual, color = "Actual"), linewidth = 1) +
+  geom_line(aes(y = Forecast_Now, color = "Forecast (No Lag)"), linetype = "dotted", linewidth = 1) +
+  geom_line(aes(y = Forecast_Lag, color = "Forecast (Lagged)"), linetype = "dashed", linewidth = 1) +
+  labs(title = "Climate Model Forecast vs Actual", y = "Cocoa Price", x = "Date", color = "Legend") +
+  theme_minimal()
+
+# Diagnostics
+checkresiduals(fit_now)
+checkresiduals(fit_lag)
+
+# Merge economic data with cocoa
+cocoa_clean <- cocoa_data %>% drop_na()
+econ_now <- inner_join(cocoa_clean, cpi, by = "Month") %>% inner_join(ppi, by = "Month") %>% drop_na()
+econ_lag <- econ_now %>%
+  mutate(CPI = CPI_lag1, PPI = PPI_lag1) %>%
+  select(Month, AvgPrice, CPI, PPI) %>% drop_na()
+
+build_econ_model <- function(df, x_vars) {
+  df <- df %>% drop_na(all_of(c("AvgPrice", x_vars)))
+  n <- nrow(df)
+  n_test <- 12
+  df_train <- df[1:(n - n_test), ]
+  df_test <- df[(n - n_test + 1):n, ]
+
+  list(
+    y_train = ts(df_train$AvgPrice, start = c(year(min(df_train$Month)), month(min(df_train$Month))), frequency = 12),
+    y_test = ts(df_test$AvgPrice, start = c(year(min(df_test$Month)), month(min(df_test$Month))), frequency = 12),
+    x_train = as.matrix(df_train[, x_vars]),
+    x_test = as.matrix(df_test[, x_vars]),
+    dates = df_test$Month
+  )
+}
+
+model_econ_now <- build_econ_model(econ_now, c("CPI", "PPI"))
+model_econ_lag <- build_econ_model(econ_lag, c("CPI", "PPI"))
+
+fit_econ_now <- Arima(model_econ_now$y_train, order = c(3,1,0), xreg = model_econ_now$x_train)
+fit_econ_lag <- Arima(model_econ_lag$y_train, order = c(3,1,0), xreg = model_econ_lag$x_train)
+
+fc_econ_now <- forecast(fit_econ_now, xreg = model_econ_now$x_test, h = 12)
+fc_econ_lag <- forecast(fit_econ_lag, xreg = model_econ_lag$x_test, h = 12)
+
+rmse_econ_now <- rmse(model_econ_now$y_test, fc_econ_now$mean)
+rmse_econ_lag <- rmse(model_econ_lag$y_test, fc_econ_lag$mean)
+
+results_econ <- data.frame(
+  Model = c("Current Economic", "Lagged Economic"),
+  AIC = c(AIC(fit_econ_now), AIC(fit_econ_lag)),
+  RMSE = c(rmse_econ_now, rmse_econ_lag)
+)
+
+print(results_econ)
+
+forecast_econ_df <- data.frame(
+  Date = model_econ_now$dates,
+  Actual = as.numeric(model_econ_now$y_test),
+  Forecast_Now = as.numeric(fc_econ_now$mean),
+  Forecast_Lag = as.numeric(fc_econ_lag$mean)
+)
+
+# Plot
+library(ggplot2)
+ggplot(forecast_econ_df, aes(x = Date)) +
+  geom_line(aes(y = Actual, color = "Actual"), linewidth = 1) +
+  geom_line(aes(y = Forecast_Now, color = "Forecast (Current)"), linetype = "dotted", linewidth = 1) +
+  geom_line(aes(y = Forecast_Lag, color = "Forecast (Lagged)"), linetype = "dashed", linewidth = 1) +
+  labs(title = "Economic Model Forecast vs Actual", y = "Cocoa Price", x = "Date", color = "Legend") +
+  theme_minimal()
+
+# Diagnostics
+checkresiduals(fit_econ_now)
+checkresiduals(fit_econ_lag)
+
+
+\end{lstlisting}
